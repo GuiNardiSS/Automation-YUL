@@ -1,0 +1,18 @@
+export const AUDIOVISUAL_KEYWORDS = [
+  'audiovisual',
+  'cinema',
+  'cinematografico',
+  'cinematografica',
+  'captacao de imagem',
+  'gravacao de video',
+  'edicao de video',
+  'producao de video',
+  'producao audiovisual',
+  'filmagem',
+  'videomaker',
+  'motion graphics',
+  'transmissao ao vivo',
+  'cobertura audiovisual',
+  'making of',
+  'videorreportagem',
+];
