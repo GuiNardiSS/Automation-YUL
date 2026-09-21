@@ -1,0 +1,38 @@
+name: Poll PNCP for audiovisual tenders
+
+on:
+  schedule:
+    # Every 10 minutes, 11:00-20:50 UTC == 08:00-17:50 America/Sao_Paulo
+    # (Brazil has used a fixed UTC-3 offset year-round since abolishing DST
+    # in 2019, so this UTC window never drifts). The in-process
+    # isWithinBusinessHours() guard in src/index.ts is a second, defensive
+    # check in case a run fires late due to GitHub Actions schedule delay.
+    - cron: '*/10 11-20 * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: poll-cycle
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    # Backstop for anything not already individually bounded (Redis/PNCP/SMTP
+    # each have their own short timeouts — see their docs.md files) such as a
+    # stuck npm ci/build. Without this, a genuine hang falls back to GitHub's
+    # 360-minute default, which would exhaust the free-tier minutes budget.
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - run: npm start
+        env:
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_APP_PASSWORD: ${{ secrets.SMTP_APP_PASSWORD }}
+          RECIPIENT_EMAILS: ${{ secrets.RECIPIENT_EMAILS }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}

@@ -5,17 +5,65 @@ import { RedisSeenStore } from './dedup/redisStore.js';
 import { createTransport } from './email/sender.js';
 import { createLogger } from './logger.js';
 import { runOnce } from './pipeline.js';
-import { registerPollSchedule } from './scheduler.js';
+import { isWithinBusinessHours } from './scheduler.js';
+
+const REDIS_QUIT_TIMEOUT_MS = 5000;
+
+async function closeRedis(redis: Redis): Promise<void> {
+  let timeoutHandle: NodeJS.Timeout;
+  const forceDisconnect = new Promise<void>((resolve) => {
+    timeoutHandle = setTimeout(() => {
+      redis.disconnect();
+      resolve();
+    }, REDIS_QUIT_TIMEOUT_MS);
+  });
+
+  await Promise.race([redis.quit().then(() => {}), forceDisconnect]);
+  clearTimeout(timeoutHandle!);
+}
 
 const config = loadConfig(process.env);
 const logger = createLogger(config.logDir, config.logLevel);
-const redis = new Redis(config.redisUrl);
-redis.on('error', (error) => logger.error('redis.connection_error', { error: error.message }));
-const seenStore = new RedisSeenStore(redis, config.redisSeenTtlSeconds);
-const emailTransport = createTransport(config);
 
-logger.info('startup', { pollCronExpression: config.pollCronExpression, pollTimezone: config.pollTimezone });
+async function main(): Promise<void> {
+  // Checked before touching Redis/SMTP at all: this is the common case when a
+  // GitHub Actions schedule fires late (drift/delay), and skipping here means
+  // the skip path costs nothing beyond a clock check.
+  if (!isWithinBusinessHours(new Date(), config.pollTimezone)) {
+    logger.info('scheduler.skipped', { reason: 'outside_business_hours' });
+    return;
+  }
 
-registerPollSchedule(config.pollCronExpression, config.pollTimezone, logger, () =>
-  runOnce({ config, logger, seenStore, emailTransport }),
-);
+  // Bounded connect/retry settings: this now runs inside a billed-by-the-minute
+  // GitHub Actions job, not an always-on process, so an unreachable Redis
+  // (bad secret, Upstash outage) must fail fast rather than retrying forever
+  // and burning the job's minutes budget until CI's own multi-hour timeout.
+  const redis = new Redis(config.redisUrl, {
+    connectTimeout: 10000,
+    maxRetriesPerRequest: 3,
+    retryStrategy: (times) => (times > 5 ? null : Math.min(times * 500, 3000)),
+  });
+  redis.on('error', (error) => logger.error('redis.connection_error', { error: error.message }));
+  const seenStore = new RedisSeenStore(redis, config.redisSeenTtlSeconds);
+  const emailTransport = createTransport(config);
+
+  try {
+    await runOnce({ config, logger, seenStore, emailTransport });
+  } finally {
+    // Deliberately not `await`ed into the same try — if runOnce() above threw
+    // (the documented main failure mode, e.g. Redis unreachable), a `finally`
+    // block that itself throws would silently replace that original error per
+    // normal JS semantics. Logging any close failure separately keeps the
+    // real root cause visible in the run's logs instead of being masked.
+    await closeRedis(redis).catch((error) => {
+      logger.error('redis.close_failed', { error: error instanceof Error ? error.message : String(error) });
+    });
+  }
+}
+
+main()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    logger.error('cycle.failed', { error: error instanceof Error ? error.message : String(error) });
+    process.exit(1);
+  });

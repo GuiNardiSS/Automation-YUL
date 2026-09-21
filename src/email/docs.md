@@ -10,7 +10,7 @@ Path: @/src/email
 ### How it fits into the larger codebase
 
 - `src/pipeline.ts`'s `dispatchEmails` is the only caller of both `formatter.ts` and `sender.ts`: it picks `formatDigestEmail` when the new-match count exceeds `Config.emailDigestThreshold`, otherwise `formatSingleMatchEmail` per match, then calls `sendEmail` for each formatted result.
-- `createTransport` is built once in `src/index.ts` from SMTP settings in `Config` (`src/config.ts`) and reused across every cron cycle, rather than reconnecting per email.
+- `createTransport` is built once per run in `src/index.ts` from SMTP settings in `Config` (`src/config.ts`) and reused for every email sent within that run, rather than reconnecting per email. Since each GitHub Actions invocation is a fresh process (see the root `docs.md`), the transport itself is rebuilt on every run — there is no cross-run connection pooling.
 - `scripts/send-test-email.ts` calls `createTransport`/`sendEmail` directly, independent of the pipeline, as a manual pre-go-live SMTP smoke test.
 
 ### Core Implementation
@@ -22,7 +22,7 @@ Path: @/src/email
 
 - `sender.ts` has no unit tests by design — it's an I/O boundary, verified instead via `scripts/send-test-email.ts` (manual, real-SMTP smoke test) and by reading the `email.sent`/`email.failed`/`email.partially_rejected` log lines during a live run.
 - Partial rejection is deliberately not treated as a failure worth retrying: nodemailer can resolve `sendMail` successfully even when some recipients were rejected, and retrying via the same `unmarkSeen`/resend path used for full failures would resend to the recipients who were already successfully accepted. For this project's small, static recipient list, an occasional silent partial failure (now at least visible in logs) was judged the lesser problem.
-- `sendEmail` re-throws after logging; `src/pipeline.ts`'s shared `sendAndUnmarkOnFailure` helper (used by `dispatchEmails` for both the digest and individual-email paths) catches that per match (or once for a digest), calls `seenStore.unmarkSeen()` on the affected match(es), and — for the individual-email path — continues on to the remaining matches rather than aborting the whole cycle. This means one failed send doesn't block sibling matches in the same cycle, and the failed one itself is retried on the next cron tick instead of being silently dropped — see `src/dedup/docs.md`.
+- `sendEmail` re-throws after logging; `src/pipeline.ts`'s shared `sendAndUnmarkOnFailure` helper (used by `dispatchEmails` for both the digest and individual-email paths) catches that per match (or once for a digest), calls `seenStore.unmarkSeen()` on the affected match(es), and — for the individual-email path — continues on to the remaining matches rather than aborting the whole cycle. This means one failed send doesn't block sibling matches in the same cycle, and the failed one itself is retried on the next scheduled run instead of being silently dropped — see `src/dedup/docs.md`.
 - `EMAIL_DIGEST_THRESHOLD` (default 10, in `Config.emailDigestThreshold`) exists purely to avoid inbox flooding when a poll cycle turns up an unusually large batch of new matches; it switches the whole batch to one combined email instead of one email per tender.
 
 Created and maintained by Nori.
