@@ -13,7 +13,6 @@ export interface Config {
   pncpLookbackDays: number;
   pncpPageSize: number;
   pncpRequestDelayMs: number;
-  pollCronExpression: string;
   pollTimezone: string;
   emailDigestThreshold: number;
   logLevel: string;
@@ -78,7 +77,6 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     pncpLookbackDays: optionalNumber(env, 'PNCP_LOOKBACK_DAYS', 1),
     pncpPageSize: optionalNumber(env, 'PNCP_PAGE_SIZE', 50),
     pncpRequestDelayMs: optionalNumber(env, 'PNCP_REQUEST_DELAY_MS', 1500),
-    pollCronExpression: optionalString(env, 'POLL_CRON_EXPRESSION', '*/5 8-17 * * *'),
     pollTimezone: optionalString(env, 'POLL_TIMEZONE', 'America/Sao_Paulo'),
     emailDigestThreshold: optionalNumber(env, 'EMAIL_DIGEST_THRESHOLD', 10),
     logLevel: optionalString(env, 'LOG_LEVEL', 'info'),

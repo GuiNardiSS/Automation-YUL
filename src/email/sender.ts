@@ -8,6 +8,15 @@ export interface EmailContent {
   html: string;
 }
 
+// Explicit, deliberately modest timeouts (nodemailer's own defaults run into
+// multiple minutes) — this now runs inside a billed-by-the-minute GitHub
+// Actions job, so a stalled SMTP handshake/send must fail fast rather than
+// silently consuming the job's time budget, matching the same reasoning
+// already applied to the Redis and PNCP connections.
+const SMTP_CONNECTION_TIMEOUT_MS = 10000;
+const SMTP_GREETING_TIMEOUT_MS = 10000;
+const SMTP_SOCKET_TIMEOUT_MS = 20000;
+
 export function createTransport(config: Config) {
   return nodemailer.createTransport({
     host: config.smtpHost,
@@ -17,6 +26,9 @@ export function createTransport(config: Config) {
       user: config.smtpUser,
       pass: config.smtpAppPassword,
     },
+    connectionTimeout: SMTP_CONNECTION_TIMEOUT_MS,
+    greetingTimeout: SMTP_GREETING_TIMEOUT_MS,
+    socketTimeout: SMTP_SOCKET_TIMEOUT_MS,
   });
 }
 

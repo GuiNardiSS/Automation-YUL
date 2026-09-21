@@ -41,7 +41,6 @@ describe('loadConfig', () => {
     expect(config.pncpLookbackDays).toBe(1);
     expect(config.pncpPageSize).toBe(50);
     expect(config.pncpRequestDelayMs).toBe(1500);
-    expect(config.pollCronExpression).toBe('*/5 8-17 * * *');
     expect(config.pollTimezone).toBe('America/Sao_Paulo');
     expect(config.emailDigestThreshold).toBe(10);
     expect(config.logLevel).toBe('info');

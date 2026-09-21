@@ -68,8 +68,8 @@ export function shouldDigest(matchCount: number, threshold: number): boolean {
 }
 
 // Matches are marked "seen" (selectNewMatches) before we know whether the email
-// will actually go out. If a send fails, we unmark it here so the next 5-minute
-// poll cycle retries — the alternative (leaving it marked) would silently drop
+// will actually go out. If a send fails, we unmark it here so the next scheduled
+// run retries — the alternative (leaving it marked) would silently drop
 // the tender's notification forever, which defeats the entire point of this
 // system for a case (transient SMTP failure) that's likely to resolve itself.
 async function sendAndUnmarkOnFailure(

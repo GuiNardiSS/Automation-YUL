@@ -33,6 +33,7 @@ const baseParams = {
   uf: 'SC',
   pageSize: 2,
   requestDelayMs: 0,
+  requestTimeoutMs: 200,
 };
 
 let mockAgent: MockAgent;
@@ -128,7 +129,7 @@ describe('fetchAllContratacoes', () => {
     // ever actually deliver (or a numeroPagina/totalPaginas schema mismatch,
     // which src/pncp/types.ts flags as unverified pending live-API testing).
     // Without a hard cap this would loop until the process runs out of memory
-    // or the 5-minute poll cycle stalls forever.
+    // or the scheduled run stalls forever.
     const client = mockAgent.get(ORIGIN);
     client
       .intercept({ path: pathWithQuery({}), method: 'GET' })
@@ -137,4 +138,18 @@ describe('fetchAllContratacoes', () => {
 
     await expect(fetchAllContratacoes({ ...baseParams, maxPages: 3 })).rejects.toThrow(/exceeded.*maxPages/i);
   });
+
+  it('gives up and throws instead of hanging forever when PNCP never responds', async () => {
+    // Found via a real smoke test: a GitHub Actions job billed by the minute
+    // must not hang indefinitely waiting on a stalled PNCP response. Delays
+    // the reply well beyond requestTimeoutMs (200ms) to simulate that.
+    const client = mockAgent.get(ORIGIN);
+    client
+      .intercept({ path: pathWithQuery({}), method: 'GET' })
+      .reply(200, page([], 1, 1))
+      .delay(5000)
+      .persist();
+
+    await expect(fetchAllContratacoes(baseParams)).rejects.toThrow(/timeout/i);
+  }, 3000);
 });
