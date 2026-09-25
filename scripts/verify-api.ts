@@ -1,8 +1,6 @@
-// Task 0 — run this manually against the live PNCP API before trusting anything
-// in src/pncp/types.ts or src/pncp/client.ts. See the plan's "Task 0" section
-// for what to check: whether codigoModalidadeContratacao is really required,
-// exact field names/nesting, actual default/max tamanhoPagina, and whether
-// server-side uf filtering is reliable.
+// Manual debugging aid: prints raw responses from the live PNCP API.
+// The first request deliberately omits codigoModalidadeContratacao, which PNCP
+// rejects with HTTP 400 — useful to confirm that requirement still holds.
 import 'dotenv/config';
 import { fetch } from 'undici';
 

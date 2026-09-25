@@ -1,8 +1,9 @@
 # PNCP Audiovisual Tender Monitor
 
-Checks PNCP (Portal Nacional de Contratações Públicas) roughly every 10 minutes during business
-hours (08:00–18:00, America/Sao_Paulo) for tenders in SC, PR, and RS matching audiovisual-related
-keywords, and emails alerts for new matches.
+Checks PNCP (Portal Nacional de Contratações Públicas) every 2 hours during business hours
+(08:17, 10:17, 12:17, 14:17, 16:17 America/Sao_Paulo) for tenders in SC, PR, and RS matching
+audiovisual-related keywords, and emails alerts for new matches. Each run looks back a full day,
+so tenders published after the last run of the day are picked up the next morning.
 
 Production runs as a **single-shot script triggered repeatedly by GitHub Actions**
 (`.github/workflows/poll.yml`), not as an always-on server — each run does one check and exits.
@@ -26,20 +27,23 @@ production; locally, `docker-compose.yml` gives you a plain Redis for developmen
    already scheduled. Use "Run workflow" there to trigger one manually and confirm it works
    before waiting on the schedule.
 5. **Watch your GitHub Actions usage** (`Settings → Billing → Actions`) for the first few days.
-   The 10-minute cadence was sized to fit GitHub's free-tier minutes for a private repo, but if
-   real per-run time runs higher than estimated, widen the interval in
-   `.github/workflows/poll.yml` (`cron: '*/10 11-20 * * *'` → e.g. `*/15`).
+   A run takes about 8 minutes: PNCP requires one query per state × modality (plus extra pages
+   for busy ones), paced 6 seconds apart because PNCP rate-limits rapid requests. Five runs a day was sized to fit
+   GitHub's 2,000 free minutes/month for a private repo. To change the cadence, edit the cron in
+   `.github/workflows/poll.yml` (currently `17 11-19/2 * * *`, in UTC) and keep `timeout-minutes`
+   comfortably above the real run time.
 6. **Keep the repository active.** GitHub automatically disables `schedule`-triggered workflows
    after 60 days with no commits to the repo (documented for public repos; unconfirmed but
    possible for private ones too). If alerts silently stop arriving, check the Actions tab first —
    the workflow may need to be manually re-enabled ("Enable workflow" button). A trivial periodic
    commit (or re-enabling it every couple of months) avoids this entirely.
 
-## Task 0 — verify the PNCP API before trusting this codebase's assumptions
+## Debugging the PNCP API (optional)
 
-`src/pncp/types.ts` and `src/pncp/client.ts` were written from secondary sources (the official
-PNCP API manual PDF, blog writeups, a GitHub gist) because live API calls weren't reachable
-during development. Run this first and compare the real response against `src/pncp/types.ts`:
+The PNCP response schema in `src/pncp/types.ts` has been verified against the live API. If PNCP
+changes something and runs start failing, this prints raw responses for SC with and without a
+modality code. Any manual request must include `codigoModalidadeContratacao` (PNCP answers
+HTTP 400 without it); a query with no results returns HTTP 204 with an empty body.
 
 ```bash
 npm run verify-api
@@ -64,7 +68,11 @@ npm run send-test-email   # confirm real Gmail SMTP credentials work
 ```
 
 Then trigger a run — locally via `npm start`, or on GitHub via the Actions tab's "Run workflow" —
-and check the logs for the four checkpoints: `pncp.request`/`pncp.response`, `filter.summary`,
-`email.draft`, `email.sent`. Locally these also land in `./logs/app-*.log`; on GitHub Actions,
+and check the logs for the checkpoints: `pncp.request`/`pncp.response`, `filter.summary`,
+`email.draft`, `email.sent`. A run fails (red in the Actions tab, and GitHub emails you) if Redis
+rejects the connection at startup (e.g. a wrong password in `REDIS_URL`) or if PNCP looks down
+(3 consecutive failed queries, or every query in the run failed); a day with no matching
+tenders is still a green run. Individual failed PNCP
+queries appear as `pncp.error` lines tagged with `uf` and `modalidade`. Locally these also land in `./logs/app-*.log`; on GitHub Actions,
 each run's logs live in that run's page under the Actions tab (no persistent log file, since the
 runner is discarded after each run).

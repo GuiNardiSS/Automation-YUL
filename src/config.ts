@@ -76,7 +76,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     ),
     pncpLookbackDays: optionalNumber(env, 'PNCP_LOOKBACK_DAYS', 1),
     pncpPageSize: optionalNumber(env, 'PNCP_PAGE_SIZE', 50),
-    pncpRequestDelayMs: optionalNumber(env, 'PNCP_REQUEST_DELAY_MS', 1500),
+    pncpRequestDelayMs: optionalNumber(env, 'PNCP_REQUEST_DELAY_MS', 6000),
     pollTimezone: optionalString(env, 'POLL_TIMEZONE', 'America/Sao_Paulo'),
     emailDigestThreshold: optionalNumber(env, 'EMAIL_DIGEST_THRESHOLD', 10),
     logLevel: optionalString(env, 'LOG_LEVEL', 'info'),

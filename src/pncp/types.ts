@@ -1,5 +1,5 @@
-// Hypothesis based on secondary sources — Task 0 (scripts/verify-api.ts) must confirm
-// these field names/shapes against the live API before this is treated as ground truth.
+// Only the fields this project reads; the live response carries many more.
+// Verified against the live /v1/contratacoes/publicacao response (2026-09-25).
 
 export interface PncpOrgaoEntidade {
   cnpj: string;
