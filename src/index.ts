@@ -48,6 +48,10 @@ async function main(): Promise<void> {
   const emailTransport = createTransport(config);
 
   try {
+    // Fails the run up front on bad credentials (e.g. WRONGPASS). Without it,
+    // Redis is only touched once a match exists, so a broken REDIS_URL stays
+    // invisible on days with no audiovisual tenders.
+    await redis.ping();
     await runOnce({ config, logger, seenStore, emailTransport });
   } finally {
     // Deliberately not `await`ed into the same try — if runOnce() above threw

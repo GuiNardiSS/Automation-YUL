@@ -34,6 +34,7 @@ const baseParams = {
   pageSize: 2,
   requestDelayMs: 0,
   requestTimeoutMs: 200,
+  rateLimitBackoffMs: 0,
 };
 
 let mockAgent: MockAgent;
@@ -91,6 +92,44 @@ describe('fetchAllContratacoes', () => {
     // error and this await would reject, failing the test.
     await expect(fetchAllContratacoes(baseParams)).resolves.toEqual([]);
   });
+
+  it('returns an empty array when PNCP answers 204 No Content for a query with no results', async () => {
+    const client = mockAgent.get(ORIGIN);
+    client.intercept({ path: pathWithQuery({ pagina: '1' }), method: 'GET' }).reply(204, '');
+
+    await expect(fetchAllContratacoes(baseParams)).resolves.toEqual([]);
+  });
+
+  it('retries after being rate limited (429) instead of treating it as a permanent client error', async () => {
+    const client = mockAgent.get(ORIGIN);
+    client.intercept({ path: pathWithQuery({ pagina: '1' }), method: 'GET' }).reply(429, 'Limite de requisições excedido');
+    client
+      .intercept({ path: pathWithQuery({ pagina: '1' }), method: 'GET' })
+      .reply(200, page([{ numeroControlePNCP: 'a' }], 1, 1));
+
+    await expect(fetchAllContratacoes(baseParams)).resolves.toEqual([{ numeroControlePNCP: 'a' }]);
+  });
+
+  it('waits before retrying a rate-limited (429) request so the retry is not rate limited again', async () => {
+    const client = mockAgent.get(ORIGIN);
+    client.intercept({ path: pathWithQuery({ pagina: '1' }), method: 'GET' }).reply(429, 'Limite de requisições excedido');
+    client.intercept({ path: pathWithQuery({ pagina: '1' }), method: 'GET' }).reply(200, page([], 1, 1));
+
+    const startedAt = Date.now();
+    await fetchAllContratacoes({ ...baseParams, rateLimitBackoffMs: 300 });
+
+    expect(Date.now() - startedAt).toBeGreaterThanOrEqual(300);
+  });
+
+  it('gives up with an error when PNCP keeps rate limiting every attempt', async () => {
+    const client = mockAgent.get(ORIGIN);
+    client
+      .intercept({ path: pathWithQuery({ pagina: '1' }), method: 'GET' })
+      .reply(429, 'Limite de requisições excedido')
+      .persist();
+
+    await expect(fetchAllContratacoes(baseParams)).rejects.toThrow(/429/);
+  }, 3000);
 
   it('throws immediately without retrying on a 4xx client error', async () => {
     const client = mockAgent.get(ORIGIN);

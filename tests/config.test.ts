@@ -40,7 +40,7 @@ describe('loadConfig', () => {
     expect(config.pncpModalidadeCodes).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
     expect(config.pncpLookbackDays).toBe(1);
     expect(config.pncpPageSize).toBe(50);
-    expect(config.pncpRequestDelayMs).toBe(1500);
+    expect(config.pncpRequestDelayMs).toBe(6000);
     expect(config.pollTimezone).toBe('America/Sao_Paulo');
     expect(config.emailDigestThreshold).toBe(10);
     expect(config.logLevel).toBe('info');
