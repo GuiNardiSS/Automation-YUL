@@ -26,9 +26,9 @@ const config = loadConfig(process.env);
 const logger = createLogger(config.logDir, config.logLevel);
 
 async function main(): Promise<void> {
-  // Checked before touching Redis/SMTP at all: this is the common case when a
-  // GitHub Actions schedule fires late (drift/delay), and skipping here means
-  // the skip path costs nothing beyond a clock check.
+  // Checked before touching Redis/SMTP at all, so a run dispatched outside
+  // business hours (a misconfigured external trigger or a manual run) costs
+  // nothing beyond a clock check.
   if (!isWithinBusinessHours(new Date(), config.pollTimezone)) {
     logger.info('scheduler.skipped', { reason: 'outside_business_hours' });
     return;
