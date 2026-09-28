@@ -5,6 +5,12 @@ Checks PNCP (Portal Nacional de Contratações Públicas) every 2 hours during b
 audiovisual-related keywords, and emails alerts for new matches. Each run looks back a full day,
 so tenders published after the last run of the day are picked up the next morning.
 
+Once a day, the first run at or after 16:00 (in practice the 16:17 run) also emails a **daily
+summary** to the owner only (`DAILY_SUMMARY_EMAIL`, never the alert recipients): how many runs
+happened and how many failed (with the error), how many tenders were analyzed, and the new alerts
+sent that day with links. It arrives even on days with no matches, so it doubles as proof that the
+system is alive — without it, a quiet day and a broken trigger look the same.
+
 Production runs as a **single-shot script executed by GitHub Actions**
 (`.github/workflows/poll.yml`), not as an always-on server — each run does one check and exits.
 The workflow has no `schedule:` trigger: a free [cron-job.org](https://cron-job.org) job starts it
@@ -20,12 +26,14 @@ production; locally, `docker-compose.yml` gives you a plain Redis for developmen
    "s": TLS is mandatory on Upstash, and `ioredis` picks that up automatically from the URL).
 2. **Get a Gmail App Password** (myaccount.google.com/apppasswords — requires 2-Step
    Verification enabled first) for the account that will send the alert emails.
-3. **Add 4 repository secrets** on GitHub (`Settings → Secrets and variables → Actions →
+3. **Add the repository secrets** on GitHub (`Settings → Secrets and variables → Actions →
    New repository secret`):
    - `SMTP_USER` — the Gmail address sending alerts
    - `SMTP_APP_PASSWORD` — the App Password from step 2
    - `RECIPIENT_EMAILS` — who receives alerts (comma-separated for multiple)
    - `REDIS_URL` — the Upstash connection string from step 1
+   - `DAILY_SUMMARY_EMAIL` — who receives the daily summary (the owner); if the secret is
+     missing or empty, no summary is sent
 4. **Confirm the workflow runs**: in the Actions tab, use "Run workflow" on "Poll PNCP for
    audiovisual tenders" to trigger one manually and check that it goes green.
 5. **Create a GitHub token for the external trigger**: `Settings → Developer settings →
@@ -53,9 +61,13 @@ production; locally, `docker-compose.yml` gives you a plain Redis for developmen
 8. **Renew the token before it expires.** The current token expires on 2027-09-25. Before then,
    use "Regenerate token" on the token's GitHub page and paste the new value into the job's
    `Authorization` header in cron-job.org. An expired token means dispatches are rejected and no
-   run happens at all — GitHub never sees a failed run, so the only signal is cron-job.org's
-   failed-execution email. Separately, the `X-GitHub-Api-Version: 2022-11-28` header has a GitHub
+   run happens at all — GitHub never sees a failed run, so the only signals are cron-job.org's
+   failed-execution email and the missing daily summary. Separately, the `X-GitHub-Api-Version: 2022-11-28` header has a GitHub
    sunset date of 2028-03-10 and must be moved to a supported version before then.
+
+> **If the daily summary doesn't arrive after ~16:30 (America/Sao_Paulo), something is wrong** —
+> check the Actions tab (did the runs happen, are they red?) and cron-job.org (did the dispatches
+> fail, e.g. an expired token?). If Redis is down, runs fail red and no summary can be sent.
 
 ## Debugging the PNCP API (optional)
 
@@ -92,6 +104,8 @@ and check the logs for the checkpoints: `pncp.request`/`pncp.response`, `filter.
 rejects the connection at startup (e.g. a wrong password in `REDIS_URL`) or if PNCP looks down
 (3 consecutive failed queries, or every query in the run failed); a day with no matching
 tenders is still a green run. Individual failed PNCP
-queries appear as `pncp.error` lines tagged with `uf` and `modalidade`. Locally these also land in `./logs/app-*.log`; on GitHub Actions,
+queries appear as `pncp.error` lines tagged with `uf` and `modalidade`. A problem with the daily
+summary itself is logged as `daily_summary.failed` (or `email.failed` for the send) and never turns
+the run red. Locally these also land in `./logs/app-*.log`; on GitHub Actions,
 each run's logs live in that run's page under the Actions tab (no persistent log file, since the
 runner is discarded after each run).

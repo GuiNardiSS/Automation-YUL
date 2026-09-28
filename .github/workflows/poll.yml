@@ -39,3 +39,4 @@ jobs:
           SMTP_APP_PASSWORD: ${{ secrets.SMTP_APP_PASSWORD }}
           RECIPIENT_EMAILS: ${{ secrets.RECIPIENT_EMAILS }}
           REDIS_URL: ${{ secrets.REDIS_URL }}
+          DAILY_SUMMARY_EMAIL: ${{ secrets.DAILY_SUMMARY_EMAIL }}

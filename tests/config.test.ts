@@ -47,6 +47,23 @@ describe('loadConfig', () => {
     expect(config.logDir).toBe('./logs');
   });
 
+  it('leaves the daily summary disabled unless a summary address is provided, defaulting the send hour to 16', () => {
+    const withoutAddress = loadConfig(baseEnv());
+    expect(withoutAddress.dailySummaryEmail).toBeUndefined();
+    expect(withoutAddress.dailySummaryHour).toBe(16);
+
+    const withAddress = loadConfig({ ...baseEnv(), DAILY_SUMMARY_EMAIL: 'owner@example.com' });
+    expect(withAddress.dailySummaryEmail).toBe('owner@example.com');
+
+    // No run happens outside 08:00-18:00, so a summary hour outside it would silently never send.
+    expect(() => loadConfig({ ...baseEnv(), DAILY_SUMMARY_HOUR: '18' })).toThrow(/DAILY_SUMMARY_HOUR/);
+    expect(() => loadConfig({ ...baseEnv(), DAILY_SUMMARY_HOUR: '7' })).toThrow(/DAILY_SUMMARY_HOUR/);
+
+    // An unset GitHub secret is injected as an empty string, which must also mean "disabled".
+    const withEmptyAddress = loadConfig({ ...baseEnv(), DAILY_SUMMARY_EMAIL: '' });
+    expect(withEmptyAddress.dailySummaryEmail).toBeUndefined();
+  });
+
   it('honors an explicitly provided optional variable over its default', () => {
     const config = loadConfig({ ...baseEnv(), EMAIL_DIGEST_THRESHOLD: '25' });
     expect(config.emailDigestThreshold).toBe(25);

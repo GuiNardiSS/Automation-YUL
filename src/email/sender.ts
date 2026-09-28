@@ -38,11 +38,12 @@ export async function sendEmail(
   content: EmailContent,
   logger: winston.Logger,
   logContext: Record<string, unknown>,
+  recipients: string[] = config.recipientEmails,
 ): Promise<void> {
   try {
     const info = await transport.sendMail({
       from: config.smtpUser,
-      to: config.recipientEmails.join(','),
+      to: recipients.join(','),
       subject: content.subject,
       text: content.text,
       html: content.html,

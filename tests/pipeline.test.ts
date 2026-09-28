@@ -96,10 +96,11 @@ describe('runOnce', () => {
       .reply(204, '');
 
     const { deps, sent } = makeDeps();
-    await runOnce(deps);
+    const result = await runOnce(deps);
 
     expect(sent).toHaveLength(1);
     expect(sent[0].text).toContain('https://pncp.gov.br/app/editais/12250999000106/2026/14');
+    expect(result.alertsSent.map((alert) => alert.link)).toEqual(['https://pncp.gov.br/app/editais/12250999000106/2026/14']);
   });
 
   it('fails the run instead of finishing silently when every PNCP request fails', async () => {
@@ -161,7 +162,8 @@ describe('runOnce', () => {
 
     const { deps, sent } = makeDeps();
 
-    await expect(runOnce(deps)).resolves.toBeUndefined();
+    const result = await runOnce(deps);
     expect(sent).toHaveLength(0);
+    expect(result.alertsSent).toEqual([]);
   });
 });
