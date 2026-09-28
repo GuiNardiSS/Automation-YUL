@@ -6,6 +6,7 @@ import { createTransport } from './email/sender.js';
 import { createLogger } from './logger.js';
 import { runOnce } from './pipeline.js';
 import { isWithinBusinessHours } from './scheduler.js';
+import { finishRun, type RunOutcome } from './summary/daily.js';
 
 const REDIS_QUIT_TIMEOUT_MS = 5000;
 
@@ -52,7 +53,25 @@ async function main(): Promise<void> {
     // Redis is only touched once a match exists, so a broken REDIS_URL stays
     // invisible on days with no audiovisual tenders.
     await redis.ping();
-    await runOnce({ config, logger, seenStore, emailTransport });
+
+    let outcome: RunOutcome;
+    let runError: unknown;
+    try {
+      outcome = { ok: true, result: await runOnce({ config, logger, seenStore, emailTransport }) };
+    } catch (error) {
+      runError = error;
+      outcome = { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+
+    // Recorded even when the run failed, so the daily summary reports it. A
+    // summary problem is logged and never replaces the run's own outcome.
+    await finishRun({ config, logger, redis, emailTransport, now: new Date(), outcome }).catch((error) => {
+      logger.error('daily_summary.failed', { error: error instanceof Error ? error.message : String(error) });
+    });
+
+    if (!outcome.ok) {
+      throw runError;
+    }
   } finally {
     // Deliberately not `await`ed into the same try — if runOnce() above threw
     // (the documented main failure mode, e.g. Redis unreachable), a `finally`

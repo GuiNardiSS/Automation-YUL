@@ -15,6 +15,8 @@ export interface Config {
   pncpRequestDelayMs: number;
   pollTimezone: string;
   emailDigestThreshold: number;
+  dailySummaryEmail?: string;
+  dailySummaryHour: number;
   logLevel: string;
   logDir: string;
 }
@@ -55,6 +57,16 @@ function splitList(value: string): string[] {
     .filter((entry) => entry.length > 0);
 }
 
+// Runs only happen during business hours (isWithinBusinessHours: 08:00-17:59),
+// so a summary hour outside that window would silently never be reached.
+function dailySummaryHour(env: Record<string, string | undefined>): number {
+  const hour = optionalNumber(env, 'DAILY_SUMMARY_HOUR', 16);
+  if (!Number.isInteger(hour) || hour < 8 || hour > 17) {
+    throw new Error(`Environment variable DAILY_SUMMARY_HOUR must be an hour between 8 and 17, got: ${hour}`);
+  }
+  return hour;
+}
+
 export function loadConfig(env: Record<string, string | undefined>): Config {
   for (const key of REQUIRED_KEYS) {
     requireEnv(env, key);
@@ -79,6 +91,9 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     pncpRequestDelayMs: optionalNumber(env, 'PNCP_REQUEST_DELAY_MS', 6000),
     pollTimezone: optionalString(env, 'POLL_TIMEZONE', 'America/Sao_Paulo'),
     emailDigestThreshold: optionalNumber(env, 'EMAIL_DIGEST_THRESHOLD', 10),
+    // Empty counts as unset: GitHub Actions injects a missing secret as "".
+    dailySummaryEmail: env.DAILY_SUMMARY_EMAIL || undefined,
+    dailySummaryHour: dailySummaryHour(env),
     logLevel: optionalString(env, 'LOG_LEVEL', 'info'),
     logDir: optionalString(env, 'LOG_DIR', './logs'),
   };

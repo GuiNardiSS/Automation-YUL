@@ -78,7 +78,7 @@ async function fetchAllRawItems(deps: PipelineDeps, cycleId: string) {
     throw new Error(`All ${attempted} PNCP requests failed this run`);
   }
 
-  return rawItems;
+  return { rawItems, failedQueries: attempted - succeeded };
 }
 
 async function selectNewMatches(deps: PipelineDeps, matches: TenderMatch[]): Promise<TenderMatch[]> {
@@ -105,33 +105,45 @@ async function sendAndUnmarkOnFailure(
   content: { subject: string; text: string; html: string },
   matchesToUnmarkOnFailure: TenderMatch[],
   logContext: Record<string, unknown>,
-): Promise<void> {
+): Promise<boolean> {
   try {
     await sendEmail(deps.emailTransport, deps.config, content, deps.logger, logContext);
+    return true;
   } catch {
     await Promise.all(matchesToUnmarkOnFailure.map((match) => deps.seenStore.unmarkSeen(match.id)));
+    return false;
   }
 }
 
-async function dispatchEmails(deps: PipelineDeps, cycleId: string, newMatches: TenderMatch[]): Promise<void> {
+async function dispatchEmails(deps: PipelineDeps, cycleId: string, newMatches: TenderMatch[]): Promise<TenderMatch[]> {
   if (shouldDigest(newMatches.length, deps.config.emailDigestThreshold)) {
     const content = formatDigestEmail(newMatches);
     deps.logger.info('email.draft', { cycleId, kind: 'digest', count: newMatches.length, subject: content.subject });
-    await sendAndUnmarkOnFailure(deps, content, newMatches, { cycleId, kind: 'digest' });
-    return;
+    const sent = await sendAndUnmarkOnFailure(deps, content, newMatches, { cycleId, kind: 'digest' });
+    return sent ? newMatches : [];
   }
 
+  const delivered: TenderMatch[] = [];
   for (const match of newMatches) {
     const content = formatSingleMatchEmail(match);
     deps.logger.info('email.draft', { cycleId, tenderId: match.id, subject: content.subject });
-    await sendAndUnmarkOnFailure(deps, content, [match], { cycleId, tenderId: match.id });
+    if (await sendAndUnmarkOnFailure(deps, content, [match], { cycleId, tenderId: match.id })) {
+      delivered.push(match);
+    }
   }
+  return delivered;
 }
 
-export async function runOnce(deps: PipelineDeps): Promise<void> {
+export interface RunResult {
+  totalFetched: number;
+  alertsSent: Array<{ title: string; link: string }>;
+  failedQueries: number;
+}
+
+export async function runOnce(deps: PipelineDeps): Promise<RunResult> {
   const cycleId = new Date().toISOString();
 
-  const rawItems = await fetchAllRawItems(deps, cycleId);
+  const { rawItems, failedQueries } = await fetchAllRawItems(deps, cycleId);
   const mappedTenders = toTenderMatchesSafely(rawItems, (item, error) => {
     deps.logger.error('pncp.mapping_error', { cycleId, itemId: item.numeroControlePNCP, error: error.message });
   });
@@ -144,10 +156,11 @@ export async function runOnce(deps: PipelineDeps): Promise<void> {
   });
 
   const newMatches = await selectNewMatches(deps, allMatches);
+  const delivered = newMatches.length === 0 ? [] : await dispatchEmails(deps, cycleId, newMatches);
 
-  if (newMatches.length === 0) {
-    return;
-  }
-
-  await dispatchEmails(deps, cycleId, newMatches);
+  return {
+    totalFetched: rawItems.length,
+    alertsSent: delivered.map((match) => ({ title: match.title, link: match.link })),
+    failedQueries,
+  };
 }
