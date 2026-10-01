@@ -30,12 +30,37 @@ describe('formatSingleMatchEmail', () => {
     const email = formatSingleMatchEmail(sample);
     expect(email.text).toContain(sample.title);
     expect(email.text).toContain(sample.publisherName);
-    expect(email.text).toContain(sample.publicationDate);
+    expect(email.text).toContain('20/08/2026');
     expect(email.text).toContain(sample.description);
     expect(email.text).toContain(sample.municipio);
     expect(email.text).toContain(sample.uf);
     expect(email.text).toContain(sample.modality);
     expect(email.text).toContain(sample.link);
+  });
+
+  it('labels every field in Portuguese, in both the text and html bodies, since alerts go to a Brazilian client', () => {
+    const email = formatSingleMatchEmail(sample);
+    for (const body of [email.text, email.html]) {
+      for (const label of ['Órgão:', 'Data de publicação:', 'Local:', 'Modalidade:', 'Objeto:', 'Link do edital:']) {
+        expect(body).toContain(label);
+      }
+      expect(body).not.toMatch(/Publisher|Publication Date|Location|Hiring Method|Description|Title:/);
+    }
+  });
+
+  it('shows the tender object only once, since PNCP has no separate title field', () => {
+    const email = formatSingleMatchEmail({ ...sample, title: sample.description });
+    for (const body of [email.text, email.html]) {
+      expect(body.split(sample.description).length - 1).toBe(1);
+    }
+  });
+
+  it('shows a full PNCP timestamp as a Brazilian date', () => {
+    const email = formatSingleMatchEmail({ ...sample, publicationDate: '2026-09-25T08:28:28' });
+    for (const body of [email.text, email.html]) {
+      expect(body).toContain('25/09/2026');
+      expect(body).not.toContain('2026-09-25');
+    }
   });
 
   it('includes the direct link as a clickable href in the html body', () => {
@@ -77,5 +102,7 @@ describe('formatDigestEmail', () => {
   it('includes the total count of matches in the subject', () => {
     const email = formatDigestEmail([sample, sample2]);
     expect(email.subject).toMatch(/\b2\b/);
+    expect(email.subject).toMatch(/licitações/);
+    expect(email.subject).not.toMatch(/tenders/);
   });
 });
