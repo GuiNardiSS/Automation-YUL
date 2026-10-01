@@ -46,8 +46,13 @@ describe('formatSingleMatchEmail', () => {
       }
       expect(body).not.toMatch(/Publisher|Publication Date|Location|Hiring Method|Description|Title:/);
     }
-    // The html shows the title as its heading, so only the text body labels it.
-    expect(email.text).toContain('Título:');
+  });
+
+  it('shows the tender object only once, since PNCP has no separate title field', () => {
+    const email = formatSingleMatchEmail({ ...sample, title: sample.description });
+    for (const body of [email.text, email.html]) {
+      expect(body.split(sample.description).length - 1).toBe(1);
+    }
   });
 
   it('shows a full PNCP timestamp as a Brazilian date', () => {

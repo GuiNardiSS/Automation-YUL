@@ -22,26 +22,26 @@ function formatBrazilianDate(value: string): string {
   return match ? `${match[3]}/${match[2]}/${match[1]}` : value;
 }
 
+// PNCP has no title separate from the object (objetoCompra), so the object
+// is shown once, first, instead of repeating it as a title.
 function tenderTextBlock(tender: TenderMatch): string {
   return [
-    `Título: ${tender.title}`,
+    `Objeto: ${tender.description}`,
     `Órgão: ${tender.publisherName} (${tender.unitName})`,
     `Data de publicação: ${formatBrazilianDate(tender.publicationDate)}`,
     `Local: ${tender.municipio}, ${tender.uf}`,
     `Modalidade: ${tender.modality}`,
-    `Objeto: ${tender.description}`,
     `Link do edital: ${tender.link}`,
   ].join('\n');
 }
 
 function tenderHtmlBlock(tender: TenderMatch): string {
   return [
-    `<h2>${escapeHtml(tender.title)}</h2>`,
+    `<p><strong>Objeto:</strong> ${escapeHtml(tender.description)}</p>`,
     `<p><strong>Órgão:</strong> ${escapeHtml(tender.publisherName)} (${escapeHtml(tender.unitName)})</p>`,
     `<p><strong>Data de publicação:</strong> ${escapeHtml(formatBrazilianDate(tender.publicationDate))}</p>`,
     `<p><strong>Local:</strong> ${escapeHtml(tender.municipio)}, ${escapeHtml(tender.uf)}</p>`,
     `<p><strong>Modalidade:</strong> ${escapeHtml(tender.modality)}</p>`,
-    `<p><strong>Objeto:</strong> ${escapeHtml(tender.description)}</p>`,
     `<p><strong>Link do edital:</strong> <a href="${escapeHtml(tender.link)}">${escapeHtml(tender.link)}</a></p>`,
   ].join('\n');
 }
